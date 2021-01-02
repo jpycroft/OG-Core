@@ -2,6 +2,7 @@
 ------------------------------------------------------------------------
 Functions for generating demographic objects necessary for the OG-USA
 model
+File rewritten to load UK demographic data for 2018.
 ------------------------------------------------------------------------
 '''
 # Import packages
@@ -54,43 +55,56 @@ def get_fert(totpers, min_yr, max_yr, graph=False):
     pop_data_samp = pop_data[(pop_data['Age'] >= min_yr - 1) &
                              (pop_data['Age'] <= max_yr - 1)]
     curr_pop = np.array(pop_data_samp['2013'], dtype='f')
+    # curr_pop = np.array(pop_data_samp['2018'], dtype='f')
+    print('curr_pop in get_fert: ', curr_pop)
     curr_pop_pct = curr_pop / curr_pop.sum()
-    # Get fertility rate by age-bin data
-    fert_data = (np.array([0.0, 0.0, 0.3, 12.3, 47.1, 80.7, 105.5, 98.0,
-                           49.3, 10.4, 0.8, 0.0, 0.0]) / 2000)
-    # Mid points of age bins
-    age_midp = np.array([9, 10, 12, 16, 18.5, 22, 27, 32, 37, 42, 47,
-                         55, 56])
-    # Generate interpolation functions for fertility rates
-    fert_func = si.interp1d(age_midp, fert_data, kind='cubic')
-    # Calculate average fertility rate in each age bin using trapezoid
-    # method with a large number of points in each bin.
-    binsize = (max_yr - min_yr + 1) / totpers
-    num_sub_bins = float(10000)
-    len_subbins = (np.float64(100 * num_sub_bins)) / totpers
-    age_sub = (np.linspace(np.float64(binsize) / num_sub_bins,
-                           np.float64(max_yr),
-                           int(num_sub_bins*max_yr)) - 0.5 *
-               np.float64(binsize) / num_sub_bins)
-    curr_pop_sub = np.repeat(np.float64(curr_pop_pct) / num_sub_bins,
-                             num_sub_bins)
-    fert_rates_sub = np.zeros(curr_pop_sub.shape)
-    pred_ind = (age_sub > age_midp[0]) * (age_sub < age_midp[-1])
-    age_pred = age_sub[pred_ind]
-    fert_rates_sub[pred_ind] = np.float64(fert_func(age_pred))
-    fert_rates = np.zeros(totpers)
-    end_sub_bin = 0
-    for i in range(totpers):
-        beg_sub_bin = int(end_sub_bin)
-        end_sub_bin = int(np.rint((i + 1) * len_subbins))
-        fert_rates[i] = ((
-            curr_pop_sub[beg_sub_bin:end_sub_bin] *
-            fert_rates_sub[beg_sub_bin:end_sub_bin]).sum() /
-            curr_pop_sub[beg_sub_bin:end_sub_bin].sum())
+    # load in births by age of mother
+    fert_file = os.path.join(
+        CUR_PATH, 'data', 'demographic', 'fert_data.csv')
+    fert_data = pd.read_csv(fert_file, thousands=',')
+    print('fert_data: ', fert_data)
+    fert_array = np.array(fert_data['Births'], dtype='f')
+    print('fert_array: ', fert_array)
+    # calculate fertility rate per person 
+    fert_rates = fert_array / curr_pop
+    print('fert_rate: ', fert_rates)
 
-    if graph:
-        pp.plot_fert_rates(fert_func, age_midp, totpers, min_yr, max_yr,
-                           fert_data, fert_rates, output_dir=OUTPUT_DIR)
+
+    # # Get fertility rate by age-bin data
+    # fert_data = (np.array([0.0, 0.0, 0.3, 12.3, 47.1, 80.7, 105.5, 98.0,
+    #                        49.3, 10.4, 0.8, 0.0, 0.0]) / 2000)
+    # # Mid points of age bins
+    # age_midp = np.array([9, 10, 12, 16, 18.5, 22, 27, 32, 37, 42, 47,
+    #                      55, 56])
+    # # Generate interpolation functions for fertility rates
+    # fert_func = si.interp1d(age_midp, fert_data, kind='cubic')
+    # # Calculate average fertility rate in each age bin using trapezoid
+    # # method with a large number of points in each bin.
+    # binsize = (max_yr - min_yr + 1) / totpers
+    # num_sub_bins = float(10000)
+    # len_subbins = (np.float64(100 * num_sub_bins)) / totpers
+    # age_sub = (np.linspace(np.float64(binsize) / num_sub_bins,
+    #                        np.float64(max_yr),
+    #                        int(num_sub_bins*max_yr)) - 0.5 *
+    #            np.float64(binsize) / num_sub_bins)
+    # curr_pop_sub = np.repeat(np.float64(curr_pop_pct) / num_sub_bins,
+    #                          num_sub_bins)
+    # fert_rates_sub = np.zeros(curr_pop_sub.shape)
+    # pred_ind = (age_sub > age_midp[0]) * (age_sub < age_midp[-1])
+    # age_pred = age_sub[pred_ind]
+    # fert_rates_sub[pred_ind] = np.float64(fert_func(age_pred))
+    # fert_rates = np.zeros(totpers)
+    # end_sub_bin = 0
+    # for i in range(totpers):
+    #     beg_sub_bin = int(end_sub_bin)
+    #     end_sub_bin = int(np.rint((i + 1) * len_subbins))
+    #     fert_rates[i] = ((
+    #         curr_pop_sub[beg_sub_bin:end_sub_bin] *
+    #         fert_rates_sub[beg_sub_bin:end_sub_bin]).sum() /
+    #         curr_pop_sub[beg_sub_bin:end_sub_bin].sum())
+    # if graph:
+    #     pp.plot_fert_rates(fert_func, age_midp, totpers, min_yr, max_yr,
+    #                        fert_data, fert_rates, output_dir=OUTPUT_DIR)
 
     return fert_rates
 
@@ -118,11 +132,12 @@ def get_mort(totpers, min_yr, max_yr, graph=False):
 
     '''
     # Get mortality rate by age data
-    infmort_rate = 0.00587  # taken from 2015 U.S. infant mortality rate
+    infmort_rate = 0.0  # UK fertility data are live births (only)
     mort_file = os.path.join(
-        CUR_PATH, 'data', 'demographic', 'mort_rates2011.csv')
+        CUR_PATH, 'data', 'demographic', 'mort_rates2018.csv')
     mort_data = pd.read_csv(mort_file, thousands=',')
     age_year_all = mort_data['Age'] + 1
+    print('mort_data[Num. Male Lives]: ', mort_data['Num. Male Lives'])
     mort_rates_all = (
         ((mort_data['Male Mort. Rate'] * mort_data['Num. Male Lives']) +
          (mort_data['Female Mort. Rate'] *
@@ -339,6 +354,8 @@ def get_pop_objs(E, S, T, min_yr, max_yr, curr_year, GraphDiag=False):
     fert_rates = get_fert(E + S, min_yr, max_yr, graph=False)
     mort_rates, infmort_rate = get_mort(E + S, min_yr, max_yr,
                                         graph=False)
+    print('fert_rates in get_pop_objs: ', fert_rates)
+    print('mort_rates in get_pop_objs: ', mort_rates)
     mort_rates_S = mort_rates[-S:]
     imm_rates_orig = get_imm_resid(E + S, min_yr, max_yr)
     OMEGA_orig = np.zeros((E + S, E + S))
