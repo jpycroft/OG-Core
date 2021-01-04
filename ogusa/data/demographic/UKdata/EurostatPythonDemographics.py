@@ -1,6 +1,9 @@
 '''
-Trial download of Eurostat demographic data using the Eurostat Python Package
+Download of Eurostat demographic data using the Eurostat Python Package
 https://pypi.org/project/eurostat/
+
+Downloads all the population, fertility & mortality data needed for 
+OG-MOD (to be processed in demographics.py).
 '''
 import eurostat
 
